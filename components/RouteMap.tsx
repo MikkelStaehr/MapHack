@@ -7,6 +7,7 @@ import { fetchCyclingRoute } from "@/lib/geo";
 
 export type RouteMapHandle = {
   fitToRoute: () => void;
+  skipNextRouting: () => void;
 };
 
 type Props = {
@@ -40,6 +41,9 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
   const isDrawingRef = useRef(false);
   const drawCoordsRef = useRef<Coord[]>([]);
   const LRef = useRef<typeof import("leaflet") | null>(null);
+  // Set by parent before a waypoint change that should NOT trigger re-routing
+  // (e.g. when loading an uploaded GPX where routeCoords is the source of truth)
+  const skipNextRoutingRef = useRef(false);
 
   // Keep refs to the latest props so Leaflet event handlers see current values
   const modeRef = useRef(mode);
@@ -181,6 +185,11 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
   useEffect(() => {
     if (mode !== "click") return;
 
+    if (skipNextRoutingRef.current) {
+      skipNextRoutingRef.current = false;
+      return;
+    }
+
     let cancelled = false;
 
     (async () => {
@@ -320,6 +329,9 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
         coords.map(([lat, lng]) => [lat, lng] as [number, number])
       );
       map.fitBounds(bounds, { padding: [40, 40] });
+    },
+    skipNextRouting: () => {
+      skipNextRoutingRef.current = true;
     },
   }));
 

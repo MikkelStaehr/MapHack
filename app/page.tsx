@@ -101,7 +101,9 @@ export default function Home() {
         showToast("Ingen punkter fundet i filen");
         return;
       }
-      // Replace current route entirely
+      // Replace current route entirely. Tell the map to skip the re-routing
+      // effect so the uploaded track isn't overwritten by OSRM/straight line.
+      mapRef.current?.skipNextRouting();
       setRouteCoords(coords);
       setWaypoints([
         { lat: coords[0][0], lng: coords[0][1] },
