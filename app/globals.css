@@ -1,0 +1,78 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-archivo-black), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --color-bg: #0e0e0e;
+  --color-panel: #161616;
+  --color-panel-2: #1f1f1f;
+  --color-ink: #f4f1ea;
+  --color-ink-dim: #8a857a;
+  --color-accent: #d4ff3a;
+  --color-accent-ink: #0e0e0e;
+  --color-line: #2a2a2a;
+  --color-danger: #ff5a5a;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* Custom marker dots */
+.marker-dot {
+  width: 14px;
+  height: 14px;
+  background: var(--color-accent);
+  border: 2px solid var(--color-bg);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.marker-dot.start {
+  background: #6dffb0;
+}
+.marker-dot.end {
+  background: var(--color-danger);
+}
+
+/* Leaflet dark tweaks */
+.leaflet-container {
+  font-family: inherit;
+  background: #1a1a1a;
+}
+.leaflet-control-zoom a {
+  background: var(--color-panel) !important;
+  color: var(--color-ink) !important;
+  border-color: var(--color-line) !important;
+}
+.leaflet-control-zoom a:hover {
+  background: var(--color-panel-2) !important;
+}
+
+/* Loading spinner */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-accent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
