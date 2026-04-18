@@ -8,6 +8,7 @@ import { fetchCyclingRoute } from "@/lib/geo";
 export type RouteMapHandle = {
   fitToRoute: () => void;
   skipNextRouting: () => void;
+  panTo: (lat: number, lng: number) => void;
 };
 
 type Props = {
@@ -396,6 +397,12 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
     },
     skipNextRouting: () => {
       skipNextRoutingRef.current = true;
+    },
+    panTo: (lat, lng) => {
+      const map = mapRef.current;
+      if (!map) return;
+      const currentZoom = map.getZoom();
+      map.setView([lat, lng], Math.max(currentZoom, 14));
     },
   }));
 

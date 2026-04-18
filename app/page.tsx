@@ -7,6 +7,7 @@ import ModeToggle from "@/components/ModeToggle";
 import ActionsPanel from "@/components/ActionsPanel";
 import { Toast, Hint, LoadingOverlay } from "@/components/Toast";
 import ShareModal from "@/components/ShareModal";
+import SearchBar from "@/components/SearchBar";
 import type { Coord, LatLng, Mode } from "@/lib/types";
 import { totalDistanceKm } from "@/lib/geo";
 import { buildGpx, parseGpx, sanitizeFilename } from "@/lib/gpx";
@@ -195,6 +196,9 @@ export default function Home() {
 
       <div className="relative flex-1">
         <ModeToggle mode={mode} onChange={setMode} />
+        <SearchBar
+          onPick={(lat, lng) => mapRef.current?.panTo(lat, lng)}
+        />
         <Hint text={hint} visible={hintVisible} />
         <RouteMap
           ref={mapRef}
