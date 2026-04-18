@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import ModeToggle from "@/components/ModeToggle";
 import ActionsPanel from "@/components/ActionsPanel";
 import { Toast, Hint, LoadingOverlay } from "@/components/Toast";
+import ShareModal from "@/components/ShareModal";
 import type { Coord, LatLng, Mode } from "@/lib/types";
 import { totalDistanceKm } from "@/lib/geo";
 import { buildGpx, parseGpx, sanitizeFilename } from "@/lib/gpx";
@@ -33,6 +34,7 @@ export default function Home() {
   const [toastKey, setToastKey] = useState(0);
   const [hint, setHint] = useState("Tap på kortet for at sætte punkter");
   const [hintVisible, setHintVisible] = useState(true);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   const mapRef = useRef<RouteMapHandle>(null);
 
@@ -143,16 +145,18 @@ export default function Home() {
     const name = (routeName || "Cykelrute").trim();
     const url = buildShareUrl(name, routeCoords);
 
-    // Reflect in address bar so refresh keeps the route and user can grab
-    // the URL manually if clipboard fails.
+    // Reflect in address bar so refresh keeps the route.
     window.history.replaceState(null, "", url);
 
+    // Open the share modal which handles QR rendering. Best-effort clipboard
+    // copy up front so the user doesn't have to click again if they don't
+    // need the QR.
     try {
       await navigator.clipboard.writeText(url);
-      showToast("Link kopieret ✓");
     } catch {
-      showToast("Kopier linket fra adresselinjen");
+      // Modal still shows the URL so they can copy manually
     }
+    setShareUrl(url);
   };
 
   const handleUploadFile = async (file: File) => {
@@ -221,6 +225,7 @@ export default function Home() {
       />
 
       <Toast key={toastKey} message={toast} />
+      <ShareModal url={shareUrl} onClose={() => setShareUrl(null)} />
     </div>
   );
 }
