@@ -248,6 +248,70 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       lineCap: "round",
       lineJoin: "round",
     }).addTo(map);
+
+    // Click on the polyline inserts a waypoint at that point in the correct
+    // segment between existing waypoints. Click mode only (in draw mode the
+    // waypoints array is just [start, end] and editing happens by re-drawing).
+    lineRef.current.on("click", (ev) => {
+      if (modeRef.current !== "click") return;
+      L.DomEvent.stopPropagation(ev);
+      const click: Coord = [ev.latlng.lat, ev.latlng.lng];
+      const wps = waypointsRef.current;
+      const rc = routeCoordsRef.current;
+      if (rc.length < 2) return;
+
+      const distSq = (a: Coord, b: Coord) => {
+        const dx = a[0] - b[0];
+        const dy = a[1] - b[1];
+        return dx * dx + dy * dy;
+      };
+
+      // Index into routeCoords nearest the click
+      let clickIdx = 0;
+      let bestClick = Infinity;
+      for (let i = 0; i < rc.length; i++) {
+        const d = distSq(click, rc[i]);
+        if (d < bestClick) {
+          bestClick = d;
+          clickIdx = i;
+        }
+      }
+
+      // Map each waypoint to its nearest routeCoord index
+      const wpIdx = wps.map((wp) => {
+        const w: Coord = [wp.lat, wp.lng];
+        let best = 0;
+        let bestD = Infinity;
+        for (let i = 0; i < rc.length; i++) {
+          const d = distSq(w, rc[i]);
+          if (d < bestD) {
+            bestD = d;
+            best = i;
+          }
+        }
+        return best;
+      });
+
+      // Find the segment (between two adjacent waypoints) containing clickIdx
+      let insertAt = wps.length;
+      if (wpIdx.length === 0 || clickIdx < wpIdx[0]) {
+        insertAt = 0;
+      } else {
+        for (let i = 0; i < wpIdx.length - 1; i++) {
+          if (clickIdx >= wpIdx[i] && clickIdx <= wpIdx[i + 1]) {
+            insertAt = i + 1;
+            break;
+          }
+        }
+      }
+
+      const next = [
+        ...wps.slice(0, insertAt),
+        { lat: click[0], lng: click[1] },
+        ...wps.slice(insertAt),
+      ];
+      callbacksRef.current.onWaypointsChange(next);
+    });
   }, [routeCoords]);
 
   // Freehand draw handlers
