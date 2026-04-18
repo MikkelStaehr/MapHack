@@ -12,6 +12,7 @@ type Props = {
   onClear: () => void;
   onDownload: () => void;
   onUploadFile: (file: File) => void;
+  onShare: () => void;
 };
 
 export default function ActionsPanel({
@@ -24,6 +25,7 @@ export default function ActionsPanel({
   onClear,
   onDownload,
   onUploadFile,
+  onShare,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -101,6 +103,14 @@ export default function ActionsPanel({
           Download GPX
         </button>
       </div>
+
+      <button
+        onClick={onShare}
+        disabled={!canDownload}
+        className={`w-full ${btnNeutral} disabled:text-[var(--color-ink-dim)]`}
+      >
+        Del som link
+      </button>
 
       <input
         ref={fileInputRef}

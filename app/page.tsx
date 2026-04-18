@@ -9,6 +9,7 @@ import { Toast, Hint, LoadingOverlay } from "@/components/Toast";
 import type { Coord, LatLng, Mode } from "@/lib/types";
 import { totalDistanceKm } from "@/lib/geo";
 import { buildGpx, parseGpx, sanitizeFilename } from "@/lib/gpx";
+import { buildShareUrl, parseShareHash } from "@/lib/share";
 import type { RouteMapHandle } from "@/components/RouteMap";
 
 // Leaflet touches window, so it must be client-only
@@ -93,6 +94,59 @@ export default function Home() {
     showToast("GPX downloadet ✓");
   };
 
+  // Load a shared route from the URL hash on mount. Retries until RouteMap
+  // has mounted so skipNextRouting() can take effect on the ref.
+  useEffect(() => {
+    const hash = window.location.hash;
+    const parsed = parseShareHash(hash);
+    if (!parsed) return;
+
+    if (parsed.expired) {
+      showToast("Linket er udløbet (>24 timer)");
+      // Clear hash so reload doesn't retry
+      window.history.replaceState(null, "", window.location.pathname);
+      return;
+    }
+
+    const apply = (attempt = 0) => {
+      if (!mapRef.current) {
+        if (attempt > 20) return; // ~1s worst case
+        setTimeout(() => apply(attempt + 1), 50);
+        return;
+      }
+      mapRef.current.skipNextRouting();
+      setRouteCoords(parsed.coords);
+      setWaypoints([
+        { lat: parsed.coords[0][0], lng: parsed.coords[0][1] },
+        {
+          lat: parsed.coords[parsed.coords.length - 1][0],
+          lng: parsed.coords[parsed.coords.length - 1][1],
+        },
+      ]);
+      if (parsed.name) setRouteName(parsed.name);
+      setTimeout(() => mapRef.current?.fitToRoute(), 60);
+      showToast("Rute indlæst fra link ✓");
+    };
+    apply();
+  }, []);
+
+  const handleShare = async () => {
+    if (routeCoords.length < 2) return;
+    const name = (routeName || "Cykelrute").trim();
+    const url = buildShareUrl(name, routeCoords);
+
+    // Reflect in address bar so refresh keeps the route and user can grab
+    // the URL manually if clipboard fails.
+    window.history.replaceState(null, "", url);
+
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("Link kopieret ✓");
+    } catch {
+      showToast("Kopier linket fra adresselinjen");
+    }
+  };
+
   const handleUploadFile = async (file: File) => {
     try {
       const text = await file.text();
@@ -154,6 +208,7 @@ export default function Home() {
         onClear={handleClear}
         onDownload={handleDownload}
         onUploadFile={handleUploadFile}
+        onShare={handleShare}
       />
 
       <Toast key={toastKey} message={toast} />
