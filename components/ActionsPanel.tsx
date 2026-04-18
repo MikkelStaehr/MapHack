@@ -13,6 +13,7 @@ type Props = {
   onDownload: () => void;
   onUploadFile: (file: File) => void;
   onShare: () => void;
+  onReverse: () => void;
 };
 
 export default function ActionsPanel({
@@ -26,6 +27,7 @@ export default function ActionsPanel({
   onDownload,
   onUploadFile,
   onShare,
+  onReverse,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -82,6 +84,13 @@ export default function ActionsPanel({
       <div className="flex gap-2">
         <button onClick={onUndo} className={`flex-1 ${btnSecondary}`}>
           Fortryd
+        </button>
+        <button
+          onClick={onReverse}
+          disabled={!canDownload}
+          className={`flex-1 ${btnSecondary} disabled:text-[var(--color-ink-dim)]`}
+        >
+          Omvend
         </button>
         <button onClick={onClear} className={`flex-1 ${btnDanger}`}>
           Ryd

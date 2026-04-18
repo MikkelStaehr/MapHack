@@ -130,6 +130,14 @@ export default function Home() {
     apply();
   }, []);
 
+  const handleReverse = () => {
+    if (routeCoords.length < 2) return;
+    mapRef.current?.skipNextRouting();
+    setRouteCoords([...routeCoords].reverse());
+    setWaypoints([...waypoints].reverse());
+    showToast("Rute omvendt ✓");
+  };
+
   const handleShare = async () => {
     if (routeCoords.length < 2) return;
     const name = (routeName || "Cykelrute").trim();
@@ -209,6 +217,7 @@ export default function Home() {
         onDownload={handleDownload}
         onUploadFile={handleUploadFile}
         onShare={handleShare}
+        onReverse={handleReverse}
       />
 
       <Toast key={toastKey} message={toast} />
