@@ -1,9 +1,32 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { Map as LeafletMap, Polyline, Marker } from "leaflet";
-import type { Coord, LatLng, Mode } from "@/lib/types";
+import { createElement } from "react";
+import type { Coord, LatLng, Mode, POI, PoiType } from "@/lib/types";
 import { fetchCyclingRoute } from "@/lib/geo";
+import { POI_CONFIG } from "@/lib/poi";
+
+// Pre-render each POI icon to a static SVG string once at module load.
+// We need HTML strings for Leaflet divIcon; rendering React every marker
+// is wasteful and the icons are static per type.
+const POI_ICON_HTML: Record<PoiType, string> = {
+  sprint: "",
+  kom: "",
+  water: "",
+  coffee: "",
+  info: "",
+};
+function ensurePoiIconHtml() {
+  if (POI_ICON_HTML.sprint) return; // already computed
+  for (const type of Object.keys(POI_CONFIG) as PoiType[]) {
+    const Icon = POI_CONFIG[type].icon;
+    POI_ICON_HTML[type] = renderToStaticMarkup(
+      createElement(Icon, { size: 18, color: "#fff", strokeWidth: 2.5 }),
+    );
+  }
+}
 
 export type RouteMapHandle = {
   fitToRoute: () => void;
@@ -16,6 +39,7 @@ type Props = {
   useRouting: boolean;
   waypoints: LatLng[];
   routeCoords: Coord[];
+  pois: POI[];
   onWaypointsChange: (wps: LatLng[]) => void;
   onRouteChange: (coords: Coord[]) => void;
   onLoadingChange: (loading: boolean) => void;
@@ -28,6 +52,7 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
     useRouting,
     waypoints,
     routeCoords,
+    pois,
     onWaypointsChange,
     onRouteChange,
     onLoadingChange,
@@ -38,6 +63,7 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const poiMarkersRef = useRef<Marker[]>([]);
   const lineRef = useRef<Polyline | null>(null);
   const isDrawingRef = useRef(false);
   const drawCoordsRef = useRef<Coord[]>([]);
@@ -181,6 +207,31 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       markersRef.current.push(m);
     });
   }, [waypoints]);
+
+  // Render POI markers. Each marker is a colored circle with a Lucide icon
+  // rendered to SVG once per type at module load.
+  useEffect(() => {
+    const map = mapRef.current;
+    const L = LRef.current;
+    if (!map || !L) return;
+
+    ensurePoiIconHtml();
+
+    poiMarkersRef.current.forEach((m) => map.removeLayer(m));
+    poiMarkersRef.current = [];
+
+    pois.forEach((poi) => {
+      const cfg = POI_CONFIG[poi.type];
+      const icon = L.divIcon({
+        className: "",
+        html: `<div class="poi-marker"><div class="poi-marker-inner" style="background:${cfg.color}">${POI_ICON_HTML[poi.type]}</div></div>`,
+        iconSize: [44, 44],
+        iconAnchor: [22, 22],
+      });
+      const m = L.marker(poi.coord, { icon }).addTo(map);
+      poiMarkersRef.current.push(m);
+    });
+  }, [pois]);
 
   // Rebuild route when waypoints or routing toggle change (click mode only)
   useEffect(() => {

@@ -48,6 +48,32 @@ body {
   background: var(--color-danger);
 }
 
+/* POI / checkpoint markers. Outer wrapper is 44x44 for Apple HIG tap target
+   while the visible circle is smaller. */
+.poi-marker {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.poi-marker-inner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-bg);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  color: #fff;
+  transition: transform 0.12s ease;
+}
+.poi-marker:active .poi-marker-inner {
+  transform: scale(0.9);
+}
+
 /* Leaflet dark tweaks */
 .leaflet-container {
   font-family: inherit;

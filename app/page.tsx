@@ -18,7 +18,7 @@ const ShareModal = dynamic(() => import("@/components/ShareModal"), {
     </div>
   ),
 });
-import type { Coord, LatLng, Mode } from "@/lib/types";
+import type { Coord, LatLng, Mode, POI } from "@/lib/types";
 import { totalDistanceKm } from "@/lib/geo";
 import { buildGpx, parseGpx, sanitizeFilename } from "@/lib/gpx";
 import { buildShareUrl, parseShareHash } from "@/lib/share";
@@ -41,6 +41,42 @@ export default function Home() {
   const [waypoints, setWaypoints] = useState<LatLng[]>([]);
   const [routeCoords, setRouteCoords] = useState<Coord[]>([]);
   const [routeName, setRouteName] = useState("");
+  // TODO(step 3): remove hardcoded test POIs once click-to-add lands
+  const [pois, setPois] = useState<POI[]>([
+    {
+      id: "test-sprint",
+      type: "sprint",
+      name: "Test sprint",
+      coord: [55.6761, 12.5683],
+      routeIndex: 0,
+    },
+    {
+      id: "test-kom",
+      type: "kom",
+      coord: [55.68, 12.57],
+      routeIndex: 0,
+    },
+    {
+      id: "test-water",
+      type: "water",
+      name: "Fontæne",
+      coord: [55.672, 12.57],
+      routeIndex: 0,
+    },
+    {
+      id: "test-coffee",
+      type: "coffee",
+      coord: [55.678, 12.565],
+      routeIndex: 0,
+    },
+    {
+      id: "test-info",
+      type: "info",
+      name: "Pas på",
+      coord: [55.674, 12.565],
+      routeIndex: 0,
+    },
+  ]);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [toastKey, setToastKey] = useState(0);
@@ -223,6 +259,7 @@ export default function Home() {
           useRouting={useRouting}
           waypoints={waypoints}
           routeCoords={routeCoords}
+          pois={pois}
           onWaypointsChange={setWaypoints}
           onRouteChange={setRouteCoords}
           onLoadingChange={setLoading}
