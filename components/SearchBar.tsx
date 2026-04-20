@@ -10,10 +10,9 @@ type Props = {
 
 type NominatimResult = { display_name: string; lat: string; lon: string };
 
-// Nominatim public API. Usage policy: max 1 req/sec, send a descriptive
-// User-Agent. Browsers set UA automatically and we debounce at 500ms so
-// typical typing stays well under the limit.
-const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
+// Goes through our own /api/geocode proxy so a proper User-Agent and
+// caching headers are attached (required by Nominatim usage policy).
+const GEOCODE_URL = "/api/geocode";
 
 export default function SearchBar({ onPick }: Props) {
   const [open, setOpen] = useState(false);
@@ -37,9 +36,9 @@ export default function SearchBar({ onPick }: Props) {
       abortRef.current = new AbortController();
       setLoading(true);
       try {
-        const url = `${NOMINATIM_URL}?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=0`;
+        const url = `${GEOCODE_URL}?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=0`;
         const res = await fetch(url, { signal: abortRef.current.signal });
-        if (!res.ok) throw new Error("Nominatim failed");
+        if (!res.ok) throw new Error("Geocode failed");
         const data: NominatimResult[] = await res.json();
         setResults(
           data
