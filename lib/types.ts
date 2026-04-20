@@ -17,3 +17,11 @@ export type POI = {
   // from routeIndex + coord + the route.
   routeIndex: number;
 };
+
+// Result of snapping a user's click to the route, handed from RouteMap up to
+// page.tsx so the create-sheet can commit it as a POI.
+export type PoiSnapRequest = {
+  coord: Coord;
+  routeIndex: number;
+  distanceFromStartM: number;
+};

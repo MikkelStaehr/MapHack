@@ -4,9 +4,22 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Map as LeafletMap, Polyline, Marker } from "leaflet";
 import { createElement } from "react";
-import type { Coord, LatLng, Mode, POI, PoiType } from "@/lib/types";
-import { fetchCyclingRoute } from "@/lib/geo";
+import type {
+  Coord,
+  LatLng,
+  Mode,
+  POI,
+  PoiSnapRequest,
+  PoiType,
+} from "@/lib/types";
+import { fetchCyclingRoute, snapToRoute } from "@/lib/geo";
 import { POI_CONFIG } from "@/lib/poi";
+
+// Snap threshold in screen pixels. Slightly looser on touch devices since
+// fingers cover more area than a mouse cursor. Fixed per session via a
+// single ontouchstart check at module load.
+const POI_SNAP_THRESHOLD_PX =
+  typeof window !== "undefined" && "ontouchstart" in window ? 40 : 30;
 
 // Pre-render each POI icon to a static SVG string once at module load.
 // We need HTML strings for Leaflet divIcon; rendering React every marker
@@ -44,6 +57,8 @@ type Props = {
   onRouteChange: (coords: Coord[]) => void;
   onLoadingChange: (loading: boolean) => void;
   onError: (message: string) => void;
+  onPoiRequest: (snap: PoiSnapRequest) => void;
+  onPoiSelect: (poiId: string) => void;
 };
 
 const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
@@ -57,6 +72,8 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
     onRouteChange,
     onLoadingChange,
     onError,
+    onPoiRequest,
+    onPoiSelect,
   },
   ref
 ) {
@@ -82,6 +99,8 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
     onRouteChange,
     onLoadingChange,
     onError,
+    onPoiRequest,
+    onPoiSelect,
   });
 
   useEffect(() => {
@@ -102,8 +121,17 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       onRouteChange,
       onLoadingChange,
       onError,
+      onPoiRequest,
+      onPoiSelect,
     };
-  }, [onWaypointsChange, onRouteChange, onLoadingChange, onError]);
+  }, [
+    onWaypointsChange,
+    onRouteChange,
+    onLoadingChange,
+    onError,
+    onPoiRequest,
+    onPoiSelect,
+  ]);
 
   // Initialize map
   useEffect(() => {
@@ -143,8 +171,33 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
         );
       }
 
-      // Click handler - add waypoint in click mode
+      // Map click handler. Priority: if the click is within the pixel
+      // threshold of an existing route, open the POI create sheet. Otherwise
+      // fall through to the click-mode behavior of appending a waypoint.
       map.on("click", (e) => {
+        const route = routeCoordsRef.current;
+        if (route.length >= 2) {
+          const snap = snapToRoute(
+            { lat: e.latlng.lat, lng: e.latlng.lng },
+            route,
+          );
+          if (snap) {
+            const clickPx = map.latLngToContainerPoint(e.latlng);
+            const snapPx = map.latLngToContainerPoint(snap.coord);
+            const distPx = Math.hypot(
+              clickPx.x - snapPx.x,
+              clickPx.y - snapPx.y,
+            );
+            if (distPx <= POI_SNAP_THRESHOLD_PX) {
+              callbacksRef.current.onPoiRequest({
+                coord: snap.coord,
+                routeIndex: snap.segmentIndex,
+                distanceFromStartM: snap.distanceFromStartM,
+              });
+              return;
+            }
+          }
+        }
         if (modeRef.current !== "click") return;
         const next = [
           ...waypointsRef.current,
@@ -229,6 +282,12 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
         iconAnchor: [22, 22],
       });
       const m = L.marker(poi.coord, { icon }).addTo(map);
+      m.on("click", (ev) => {
+        // Stop propagation so the map click handler (which opens POI-create)
+        // doesn't also fire when the user actually wanted to inspect this POI.
+        L.DomEvent.stopPropagation(ev);
+        callbacksRef.current.onPoiSelect(poi.id);
+      });
       poiMarkersRef.current.push(m);
     });
   }, [pois]);
@@ -300,70 +359,9 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       lineCap: "round",
       lineJoin: "round",
     }).addTo(map);
-
-    // Click on the polyline inserts a waypoint at that point in the correct
-    // segment between existing waypoints. Click mode only (in draw mode the
-    // waypoints array is just [start, end] and editing happens by re-drawing).
-    lineRef.current.on("click", (ev) => {
-      if (modeRef.current !== "click") return;
-      L.DomEvent.stopPropagation(ev);
-      const click: Coord = [ev.latlng.lat, ev.latlng.lng];
-      const wps = waypointsRef.current;
-      const rc = routeCoordsRef.current;
-      if (rc.length < 2) return;
-
-      const distSq = (a: Coord, b: Coord) => {
-        const dx = a[0] - b[0];
-        const dy = a[1] - b[1];
-        return dx * dx + dy * dy;
-      };
-
-      // Index into routeCoords nearest the click
-      let clickIdx = 0;
-      let bestClick = Infinity;
-      for (let i = 0; i < rc.length; i++) {
-        const d = distSq(click, rc[i]);
-        if (d < bestClick) {
-          bestClick = d;
-          clickIdx = i;
-        }
-      }
-
-      // Map each waypoint to its nearest routeCoord index
-      const wpIdx = wps.map((wp) => {
-        const w: Coord = [wp.lat, wp.lng];
-        let best = 0;
-        let bestD = Infinity;
-        for (let i = 0; i < rc.length; i++) {
-          const d = distSq(w, rc[i]);
-          if (d < bestD) {
-            bestD = d;
-            best = i;
-          }
-        }
-        return best;
-      });
-
-      // Find the segment (between two adjacent waypoints) containing clickIdx
-      let insertAt = wps.length;
-      if (wpIdx.length === 0 || clickIdx < wpIdx[0]) {
-        insertAt = 0;
-      } else {
-        for (let i = 0; i < wpIdx.length - 1; i++) {
-          if (clickIdx >= wpIdx[i] && clickIdx <= wpIdx[i + 1]) {
-            insertAt = i + 1;
-            break;
-          }
-        }
-      }
-
-      const next = [
-        ...wps.slice(0, insertAt),
-        { lat: click[0], lng: click[1] },
-        ...wps.slice(insertAt),
-      ];
-      callbacksRef.current.onWaypointsChange(next);
-    });
+    // Polyline click propagates to map by default (bubblingMouseEvents: true),
+    // which is what we want — the map click handler does snap + POI dispatch
+    // uniformly for both on-the-line and near-the-line clicks.
   }, [routeCoords]);
 
   // Freehand draw handlers

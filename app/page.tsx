@@ -7,6 +7,8 @@ import ModeToggle from "@/components/ModeToggle";
 import ActionsPanel from "@/components/ActionsPanel";
 import { Toast, Hint, LoadingOverlay } from "@/components/Toast";
 import SearchBar from "@/components/SearchBar";
+import PoiCreateSheet from "@/components/PoiCreateSheet";
+import PoiInfoSheet from "@/components/PoiInfoSheet";
 
 // qrcode + modal UI is only needed when the user actually shares — keep
 // it out of the main bundle and pull it in on first open.
@@ -18,7 +20,14 @@ const ShareModal = dynamic(() => import("@/components/ShareModal"), {
     </div>
   ),
 });
-import type { Coord, LatLng, Mode, POI } from "@/lib/types";
+import type {
+  Coord,
+  LatLng,
+  Mode,
+  POI,
+  PoiSnapRequest,
+  PoiType,
+} from "@/lib/types";
 import { totalDistanceKm } from "@/lib/geo";
 import { buildGpx, parseGpx, sanitizeFilename } from "@/lib/gpx";
 import { buildShareUrl, parseShareHash } from "@/lib/share";
@@ -41,42 +50,9 @@ export default function Home() {
   const [waypoints, setWaypoints] = useState<LatLng[]>([]);
   const [routeCoords, setRouteCoords] = useState<Coord[]>([]);
   const [routeName, setRouteName] = useState("");
-  // TODO(step 3): remove hardcoded test POIs once click-to-add lands
-  const [pois, setPois] = useState<POI[]>([
-    {
-      id: "test-sprint",
-      type: "sprint",
-      name: "Test sprint",
-      coord: [55.6761, 12.5683],
-      routeIndex: 0,
-    },
-    {
-      id: "test-kom",
-      type: "kom",
-      coord: [55.68, 12.57],
-      routeIndex: 0,
-    },
-    {
-      id: "test-water",
-      type: "water",
-      name: "Fontæne",
-      coord: [55.672, 12.57],
-      routeIndex: 0,
-    },
-    {
-      id: "test-coffee",
-      type: "coffee",
-      coord: [55.678, 12.565],
-      routeIndex: 0,
-    },
-    {
-      id: "test-info",
-      type: "info",
-      name: "Pas på",
-      coord: [55.674, 12.565],
-      routeIndex: 0,
-    },
-  ]);
+  const [pois, setPois] = useState<POI[]>([]);
+  const [pendingPoi, setPendingPoi] = useState<PoiSnapRequest | null>(null);
+  const [selectedPoiId, setSelectedPoiId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [toastKey, setToastKey] = useState(0);
@@ -111,6 +87,10 @@ export default function Home() {
   }, [routeCoords, routeName]);
 
   const distanceKm = useMemo(() => totalDistanceKm(routeCoords), [routeCoords]);
+  const selectedPoi = useMemo(
+    () => pois.find((p) => p.id === selectedPoiId) ?? null,
+    [pois, selectedPoiId],
+  );
   const pointCount = waypoints.length;
   const canDownload = routeCoords.length >= 2;
 
@@ -191,7 +171,43 @@ export default function Home() {
     mapRef.current?.skipNextRouting();
     setRouteCoords([...routeCoords].reverse());
     setWaypoints([...waypoints].reverse());
+    // Flip POIs' routeIndex to match the reversed order
+    setPois((prev) =>
+      prev.map((p) => ({
+        ...p,
+        routeIndex: Math.max(0, routeCoords.length - 2 - p.routeIndex),
+      })),
+    );
     showToast("Rute omvendt ✓");
+  };
+
+  // Creates a new POI from the currently pending snap request. id via
+  // crypto.randomUUID with a timestamp+random fallback for older environments.
+  const handleCommitPoi = (type: PoiType, name: string) => {
+    if (!pendingPoi) return;
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const trimmed = name.trim();
+    setPois((prev) => [
+      ...prev,
+      {
+        id,
+        type,
+        name: trimmed ? trimmed : undefined,
+        coord: pendingPoi.coord,
+        routeIndex: pendingPoi.routeIndex,
+      },
+    ]);
+    setPendingPoi(null);
+    showToast("Checkpoint tilføjet ✓");
+  };
+
+  const handleDeletePoi = (id: string) => {
+    setPois((prev) => prev.filter((p) => p.id !== id));
+    setSelectedPoiId(null);
+    showToast("Checkpoint slettet ✓");
   };
 
   const handleShare = async () => {
@@ -264,6 +280,8 @@ export default function Home() {
           onRouteChange={setRouteCoords}
           onLoadingChange={setLoading}
           onError={showToast}
+          onPoiRequest={setPendingPoi}
+          onPoiSelect={setSelectedPoiId}
         />
         <LoadingOverlay show={loading} />
       </div>
@@ -286,6 +304,17 @@ export default function Home() {
       {shareUrl && (
         <ShareModal url={shareUrl} onClose={() => setShareUrl(null)} />
       )}
+
+      <PoiCreateSheet
+        pending={pendingPoi}
+        onSave={handleCommitPoi}
+        onCancel={() => setPendingPoi(null)}
+      />
+      <PoiInfoSheet
+        poi={selectedPoi}
+        onDelete={handleDeletePoi}
+        onClose={() => setSelectedPoiId(null)}
+      />
     </div>
   );
 }
