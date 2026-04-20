@@ -6,8 +6,18 @@ import Header from "@/components/Header";
 import ModeToggle from "@/components/ModeToggle";
 import ActionsPanel from "@/components/ActionsPanel";
 import { Toast, Hint, LoadingOverlay } from "@/components/Toast";
-import ShareModal from "@/components/ShareModal";
 import SearchBar from "@/components/SearchBar";
+
+// qrcode + modal UI is only needed when the user actually shares — keep
+// it out of the main bundle and pull it in on first open.
+const ShareModal = dynamic(() => import("@/components/ShareModal"), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <span className="spinner" />
+    </div>
+  ),
+});
 import type { Coord, LatLng, Mode } from "@/lib/types";
 import { totalDistanceKm } from "@/lib/geo";
 import { buildGpx, parseGpx, sanitizeFilename } from "@/lib/gpx";
@@ -236,7 +246,9 @@ export default function Home() {
       />
 
       <Toast key={toastKey} message={toast} />
-      <ShareModal url={shareUrl} onClose={() => setShareUrl(null)} />
+      {shareUrl && (
+        <ShareModal url={shareUrl} onClose={() => setShareUrl(null)} />
+      )}
     </div>
   );
 }
