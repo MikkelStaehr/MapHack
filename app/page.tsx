@@ -12,6 +12,7 @@ import type { Coord, LatLng, Mode } from "@/lib/types";
 import { totalDistanceKm } from "@/lib/geo";
 import { buildGpx, parseGpx, sanitizeFilename } from "@/lib/gpx";
 import { buildShareUrl, parseShareHash } from "@/lib/share";
+import { setRouteSnapshot } from "@/lib/routeMirror";
 import type { RouteMapHandle } from "@/components/RouteMap";
 
 // Leaflet touches window, so it must be client-only
@@ -56,6 +57,12 @@ export default function Home() {
     const t = setTimeout(() => setHintVisible(false), 3000);
     return () => clearTimeout(t);
   }, [mode]);
+
+  // Mirror route into a module-level snapshot so the ErrorBoundary can
+  // rescue it if React crashes and page state becomes inaccessible.
+  useEffect(() => {
+    setRouteSnapshot(routeCoords, routeName);
+  }, [routeCoords, routeName]);
 
   const distanceKm = useMemo(() => totalDistanceKm(routeCoords), [routeCoords]);
   const pointCount = waypoints.length;
