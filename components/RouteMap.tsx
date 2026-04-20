@@ -331,6 +331,17 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       return [ll.lat, ll.lng];
     };
 
+    // Throttle the React state push to ~10Hz. Every touchmove still appends
+    // to drawCoordsRef (no data loss), but we only broadcast to the parent
+    // at most every 100ms — enough for the header distance readout to feel
+    // live without piling up N renders per second on long strokes.
+    let lastFlush = 0;
+    const FLUSH_MS = 100;
+    const flush = () => {
+      lastFlush = performance.now();
+      callbacksRef.current.onRouteChange([...drawCoordsRef.current]);
+    };
+
     const onStart = (e: MouseEvent | TouchEvent) => {
       if (modeRef.current !== "draw") return;
       e.preventDefault();
@@ -339,7 +350,7 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       isDrawingRef.current = true;
       drawCoordsRef.current = [ll];
       callbacksRef.current.onWaypointsChange([]);
-      callbacksRef.current.onRouteChange([ll]);
+      flush();
     };
 
     const onMove = (e: MouseEvent | TouchEvent) => {
@@ -348,7 +359,7 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       const ll = getLatLng(e);
       if (!ll) return;
       drawCoordsRef.current.push(ll);
-      callbacksRef.current.onRouteChange([...drawCoordsRef.current]);
+      if (performance.now() - lastFlush >= FLUSH_MS) flush();
     };
 
     const onEnd = () => {
@@ -357,6 +368,9 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       if (modeRef.current !== "draw") return;
       const coords = drawCoordsRef.current;
       if (coords.length < 2) return;
+      // Final flush catches whatever accumulated since the last throttle
+      // tick so the route and distance always end on exact data.
+      flush();
       callbacksRef.current.onWaypointsChange([
         { lat: coords[0][0], lng: coords[0][1] },
         {
