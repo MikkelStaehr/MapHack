@@ -52,9 +52,10 @@ export default function ActionsPanel({
 
   return (
     <div
-      className="flex items-center justify-center gap-0.5 border-t border-[var(--color-line)] bg-[var(--color-panel)] px-3 pt-2"
-      style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
+      className="pointer-events-none flex justify-center px-3"
+      style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
     >
+      <div className="pointer-events-auto flex items-center gap-0.5 rounded-2xl border border-[var(--color-line)] bg-[color-mix(in_srgb,var(--color-panel)_70%,transparent)] px-2 py-2 shadow-lg shadow-black/40 backdrop-blur-md">
       {phase === "route" && (
         <button
           onClick={onRoutingToggle}
@@ -111,13 +112,14 @@ export default function ActionsPanel({
         </>
       )}
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".gpx,application/gpx+xml,text/xml"
-        onChange={handleFileChange}
-        className="hidden"
-      />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".gpx,application/gpx+xml,text/xml"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+      </div>
     </div>
   );
 }

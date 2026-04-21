@@ -320,9 +320,27 @@ export default function Home() {
           onPoiSelect={setSelectedPoiId}
         />
         <LoadingOverlay show={loading} />
+
+        {/* Phase 1/2 dock floats over the map as a translucent pill so the
+            map stays fully visible behind it. Phase 3 uses a pinned panel
+            below. */}
+        {phase !== "generate" && (
+          <div className="absolute bottom-0 left-0 right-0 z-[700]">
+            <ActionsPanel
+              phase={phase}
+              useRouting={useRouting}
+              onRoutingToggle={() => setUseRouting((v) => !v)}
+              canDownload={canDownload}
+              onUndo={handleUndo}
+              onClear={handleClear}
+              onUploadFile={handleUploadFile}
+              onReverse={handleReverse}
+            />
+          </div>
+        )}
       </div>
 
-      {phase === "generate" ? (
+      {phase === "generate" && (
         <GeneratePanel
           routeCoords={routeCoords}
           pois={pois}
@@ -331,17 +349,6 @@ export default function Home() {
           canExport={canDownload}
           onDownload={handleDownload}
           onShare={handleShare}
-        />
-      ) : (
-        <ActionsPanel
-          phase={phase}
-          useRouting={useRouting}
-          onRoutingToggle={() => setUseRouting((v) => !v)}
-          canDownload={canDownload}
-          onUndo={handleUndo}
-          onClear={handleClear}
-          onUploadFile={handleUploadFile}
-          onReverse={handleReverse}
         />
       )}
 
