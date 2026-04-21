@@ -1,5 +1,7 @@
-import type { Coord, POI } from "./types";
-import { POI_GPX_SYM, POI_LABEL } from "./poiFormats";
+import type { Coord, ParsedRoute, POI, PoiType } from "./types";
+import { POI_GPX_SYM, POI_LABEL, POI_TYPES } from "./poiFormats";
+import { snapToRoute } from "./geo";
+import { newId } from "./id";
 
 const escapeXml = (s: string) =>
   s
@@ -59,21 +61,54 @@ ${trkpts}
 }
 
 /**
+ * Map an arbitrary GPX sym/type string to one of our internal PoiType
+ * buckets. Prefers our own <type> marker (exact match), falls back to
+ * reverse-lookup of POI_GPX_SYM, then a few loose heuristics on the sym
+ * keyword so routes from other apps still land somewhere sensible.
+ */
+function inferPoiTypeFromGpx(
+  typeStr: string,
+  symStr: string,
+): PoiType {
+  const t = typeStr.trim().toLowerCase();
+  if ((POI_TYPES as string[]).includes(t)) return t as PoiType;
+
+  for (const key of POI_TYPES) {
+    if (symStr === POI_GPX_SYM[key]) return key;
+  }
+
+  const sym = symStr.toLowerCase();
+  if (sym.includes("water")) return "water";
+  if (sym.includes("summit") || sym.includes("peak") || sym.includes("mountain"))
+    return "kom";
+  if (
+    sym.includes("food") ||
+    sym.includes("restaurant") ||
+    sym.includes("coffee") ||
+    sym.includes("cafe")
+  )
+    return "coffee";
+  if (sym.includes("sprint") || sym.includes("flag")) return "sprint";
+  return "info";
+}
+
+/**
  * Parse a GPX document. Tries trkpt first (tracks), then rtept (routes),
- * then wpt (waypoints) as a fallback. Returns name from <trk>/<rte>/<metadata>.
+ * then wpt (waypoints) as a fallback for the track. Also parses <wpt> as
+ * POIs (they're snapped to the parsed track before being returned).
+ * Returns name from <trk>/<rte>/<metadata>.
  *
  * Uses getElementsByTagNameNS("*", ...) instead of querySelectorAll to
  * match elements regardless of the GPX default namespace. CSS selectors
  * on XML documents with a default xmlns can fail to match the localname.
  */
-export function parseGpx(xmlText: string): { name: string; coords: Coord[] } {
+export function parseGpx(xmlText: string): ParsedRoute {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlText, "application/xml");
   const parseErr = doc.getElementsByTagName("parsererror")[0];
   if (parseErr) throw new Error("Ugyldig GPX-fil");
 
   const coords: Coord[] = [];
-
   const readPoints = (tag: string) => {
     const nodes = doc.getElementsByTagNameNS("*", tag);
     for (let i = 0; i < nodes.length; i++) {
@@ -86,7 +121,39 @@ export function parseGpx(xmlText: string): { name: string; coords: Coord[] } {
 
   readPoints("trkpt");
   if (coords.length === 0) readPoints("rtept");
-  if (coords.length === 0) readPoints("wpt");
+  // Only fall back to wpt for the track if there are no trkpt/rtept — a
+  // file with wpt AND trkpt uses wpt as POIs (below), not as the track.
+  const hasTrack = coords.length > 0;
+  if (!hasTrack) readPoints("wpt");
+
+  // Waypoints as POIs — only when we actually found a track above, so we
+  // don't double-count wpt as both the track and its own POIs.
+  const pois: POI[] = [];
+  if (hasTrack) {
+    const wpts = doc.getElementsByTagNameNS("*", "wpt");
+    for (let i = 0; i < wpts.length; i++) {
+      const w = wpts[i];
+      const lat = parseFloat(w.getAttribute("lat") || "");
+      const lng = parseFloat(w.getAttribute("lon") || "");
+      if (isNaN(lat) || isNaN(lng)) continue;
+
+      const typeStr =
+        w.getElementsByTagNameNS("*", "type")[0]?.textContent?.trim() ?? "";
+      const symStr =
+        w.getElementsByTagNameNS("*", "sym")[0]?.textContent?.trim() ?? "";
+      const nameStr = w
+        .getElementsByTagNameNS("*", "name")[0]
+        ?.textContent?.trim();
+
+      pois.push({
+        id: newId(),
+        type: inferPoiTypeFromGpx(typeStr, symStr),
+        name: nameStr || undefined,
+        coord: [lat, lng],
+        routeIndex: 0,
+      });
+    }
+  }
 
   // Look for a name in trk/rte/metadata, preferring the first match.
   let name = "";
@@ -100,7 +167,18 @@ export function parseGpx(xmlText: string): { name: string; coords: Coord[] } {
     }
   }
 
-  return { name, coords };
+  // Snap POIs onto the parsed track so they appear "on" the route.
+  if (coords.length >= 2 && pois.length > 0) {
+    for (const p of pois) {
+      const snap = snapToRoute({ lat: p.coord[0], lng: p.coord[1] }, coords);
+      if (snap) {
+        p.coord = snap.coord;
+        p.routeIndex = snap.segmentIndex;
+      }
+    }
+  }
+
+  return { name, coords, pois };
 }
 
 /**

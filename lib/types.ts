@@ -33,3 +33,11 @@ export type PoiSnapRequest = {
   routeIndex: number;
   distanceFromStartM: number;
 };
+
+// Common return shape from GPX/TCX parsers so the upload flow doesn't care
+// which format the file was.
+export type ParsedRoute = {
+  name: string;
+  coords: Coord[];
+  pois: POI[];
+};

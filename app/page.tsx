@@ -35,8 +35,9 @@ import type {
   PoiType,
 } from "@/lib/types";
 import { totalDistanceKm } from "@/lib/geo";
-import { buildGpx, parseGpx, sanitizeFilename } from "@/lib/gpx";
+import { buildGpx, sanitizeFilename } from "@/lib/gpx";
 import { buildTcx } from "@/lib/tcx";
+import { parseRouteFile } from "@/lib/import";
 import { buildShareUrl, parseShareHash } from "@/lib/share";
 import { setRouteSnapshot } from "@/lib/routeMirror";
 import type { RouteMapHandle } from "@/components/RouteMap";
@@ -280,7 +281,10 @@ export default function Home() {
   const handleUploadFile = async (file: File) => {
     try {
       const text = await file.text();
-      const { name, coords } = parseGpx(text);
+      const { name, coords, pois: parsedPois } = parseRouteFile(
+        text,
+        file.name,
+      );
       if (coords.length < 2) {
         showToast("Ingen punkter fundet i filen");
         return;
@@ -296,18 +300,23 @@ export default function Home() {
           lng: coords[coords.length - 1][1],
         },
       ]);
-      const cleanName = name || file.name.replace(/\.gpx$/i, "");
+      const cleanName = name || file.name.replace(/\.(gpx|tcx)$/i, "");
       setRouteName(cleanName);
-      // New file → fresh POI slate, back in route phase. POI parsing from
-      // the file comes in step 7.
-      setPois([]);
+      // POIs parsed from the file are already snapped to the route by the
+      // parser — apply them as-is. No dangling checkpoints from previous work.
+      setPois(parsedPois);
       setPhase("route");
       // Fit map to the new route after state settles
       setTimeout(() => mapRef.current?.fitToRoute(), 50);
-      showToast("Rute indlæst ✓");
+      const poiCount = parsedPois.length;
+      showToast(
+        poiCount > 0
+          ? `Rute + ${poiCount} checkpoint${poiCount === 1 ? "" : "s"} indlæst ✓`
+          : "Rute indlæst ✓",
+      );
     } catch (err) {
       console.error(err);
-      showToast("Kunne ikke læse GPX-filen");
+      showToast("Kunne ikke læse filen");
     }
   };
 

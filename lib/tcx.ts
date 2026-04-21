@@ -1,6 +1,7 @@
-import type { Coord, POI } from "./types";
+import type { Coord, ParsedRoute, POI, PoiType } from "./types";
 import { haversineKm, snapToRoute } from "./geo";
-import { POI_LABEL, POI_TCX_TYPE } from "./poiFormats";
+import { POI_LABEL, POI_TCX_TYPE, POI_TYPES } from "./poiFormats";
+import { newId } from "./id";
 
 const escapeXml = (s: string) =>
   s
@@ -116,4 +117,110 @@ ${trackpoints}
     </Course>
   </Courses>
 </TrainingCenterDatabase>`;
+}
+
+/**
+ * Map a TCX PointType string to one of our internal PoiType buckets. Extra
+ * Garmin categories (climb difficulty, directional arrows, danger) fall
+ * into sensible defaults so imports from other planners don't silently
+ * drop them.
+ */
+function inferPoiTypeFromTcx(pointType: string): PoiType {
+  const trimmed = pointType.trim();
+  for (const key of POI_TYPES) {
+    if (trimmed === POI_TCX_TYPE[key]) return key;
+  }
+  switch (trimmed) {
+    case "Fourth Category":
+    case "Third Category":
+    case "Second Category":
+    case "First Category":
+    case "Hors Category":
+      return "kom";
+    case "Danger":
+    case "Left":
+    case "Right":
+    case "Straight":
+    case "First Aid":
+    case "Valley":
+      return "info";
+  }
+  return "info";
+}
+
+/**
+ * Parse a TCX Course document. Reads Trackpoint positions as the route and
+ * CoursePoint positions as POIs. POIs are snapped to the parsed route so
+ * they sit exactly on the polyline even if the producer rounded coords.
+ */
+export function parseTcx(xmlText: string): ParsedRoute {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "application/xml");
+  const parseErr = doc.getElementsByTagName("parsererror")[0];
+  if (parseErr) throw new Error("Ugyldig TCX-fil");
+
+  const readPosition = (
+    parent: Element,
+  ): [number, number] | null => {
+    const pos = parent.getElementsByTagNameNS("*", "Position")[0];
+    if (!pos) return null;
+    const latEl = pos.getElementsByTagNameNS("*", "LatitudeDegrees")[0];
+    const lngEl = pos.getElementsByTagNameNS("*", "LongitudeDegrees")[0];
+    const lat = parseFloat(latEl?.textContent ?? "");
+    const lng = parseFloat(lngEl?.textContent ?? "");
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return [lat, lng];
+  };
+
+  const coords: Coord[] = [];
+  const tps = doc.getElementsByTagNameNS("*", "Trackpoint");
+  for (let i = 0; i < tps.length; i++) {
+    const c = readPosition(tps[i]);
+    if (c) coords.push(c);
+  }
+
+  const pois: POI[] = [];
+  const cps = doc.getElementsByTagNameNS("*", "CoursePoint");
+  for (let i = 0; i < cps.length; i++) {
+    const cp = cps[i];
+    const c = readPosition(cp);
+    if (!c) continue;
+    const ptStr =
+      cp.getElementsByTagNameNS("*", "PointType")[0]?.textContent ?? "";
+    const nameStr =
+      cp.getElementsByTagNameNS("*", "Name")[0]?.textContent?.trim();
+
+    pois.push({
+      id: newId(),
+      type: inferPoiTypeFromTcx(ptStr),
+      name: nameStr || undefined,
+      coord: c,
+      routeIndex: 0,
+    });
+  }
+
+  // Course <Name> lives inside <Course>. Fall back to any top-level Name.
+  let name = "";
+  const courseEl = doc.getElementsByTagNameNS("*", "Course")[0];
+  if (courseEl) {
+    const names = courseEl.getElementsByTagNameNS("*", "Name");
+    for (let i = 0; i < names.length; i++) {
+      if (names[i].parentElement === courseEl && names[i].textContent) {
+        name = names[i].textContent!.trim();
+        break;
+      }
+    }
+  }
+
+  if (coords.length >= 2 && pois.length > 0) {
+    for (const p of pois) {
+      const snap = snapToRoute({ lat: p.coord[0], lng: p.coord[1] }, coords);
+      if (snap) {
+        p.coord = snap.coord;
+        p.routeIndex = snap.segmentIndex;
+      }
+    }
+  }
+
+  return { name, coords, pois };
 }

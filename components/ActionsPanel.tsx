@@ -115,7 +115,7 @@ export default function ActionsPanel({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".gpx,application/gpx+xml,text/xml"
+          accept=".gpx,.tcx,application/gpx+xml,application/vnd.garmin.tcx+xml,text/xml"
           onChange={handleFileChange}
           className="hidden"
         />
