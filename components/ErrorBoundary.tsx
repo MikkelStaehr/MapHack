@@ -22,7 +22,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     const snap = getRouteSnapshot();
     if (snap.coords.length >= 2) {
       const name = (snap.name || "Cykelrute").trim();
-      const gpx = buildGpx(name, snap.coords);
+      const gpx = buildGpx(name, snap.coords, snap.pois);
       const blob = new Blob([gpx], { type: "application/gpx+xml" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

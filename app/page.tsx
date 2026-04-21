@@ -89,8 +89,8 @@ export default function Home() {
   // Mirror route into a module-level snapshot so the ErrorBoundary can
   // rescue it if React crashes and page state becomes inaccessible.
   useEffect(() => {
-    setRouteSnapshot(routeCoords, routeName);
-  }, [routeCoords, routeName]);
+    setRouteSnapshot(routeCoords, routeName, pois);
+  }, [routeCoords, routeName, pois]);
 
   // When entering the generate phase, fit the map to the route so the user
   // sees the whole thing at once for review. Small delay for layout.
@@ -139,7 +139,7 @@ export default function Home() {
   const handleDownload = () => {
     if (routeCoords.length < 2) return;
     const name = (routeName || "Cykelrute").trim();
-    const gpx = buildGpx(name, routeCoords);
+    const gpx = buildGpx(name, routeCoords, pois);
     const blob = new Blob([gpx], { type: "application/gpx+xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

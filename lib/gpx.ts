@@ -1,32 +1,56 @@
-import type { Coord } from "./types";
+import type { Coord, POI } from "./types";
+import { POI_GPX_SYM, POI_LABEL } from "./poiFormats";
+
+const escapeXml = (s: string) =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
 /**
- * Build a GPX 1.1 document from a track of coordinates.
+ * Build a GPX 1.1 document from a track of coordinates and optional POIs.
+ *
+ * POIs become <wpt> elements with a Garmin/Wahoo-compatible <sym> so the
+ * checkpoints render with the right icon on the cycling computer. They're
+ * sorted by routeIndex so they appear in riding order in apps that list
+ * them (Komoot, RWGPS). GPX waypoints don't carry "distance along route"
+ * — that's TCX's job.
  */
-export function buildGpx(name: string, coords: Coord[]): string {
-  const escape = (s: string) =>
-    s
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-
+export function buildGpx(
+  name: string,
+  coords: Coord[],
+  pois: POI[] = [],
+): string {
   const time = new Date().toISOString();
+
+  const sortedPois = [...pois].sort((a, b) => a.routeIndex - b.routeIndex);
+  const wpts = sortedPois
+    .map((p) => {
+      const label = p.name?.trim() || POI_LABEL[p.type];
+      return `  <wpt lat="${p.coord[0].toFixed(6)}" lon="${p.coord[1].toFixed(6)}">
+    <name>${escapeXml(label)}</name>
+    <sym>${escapeXml(POI_GPX_SYM[p.type])}</sym>
+    <type>${p.type}</type>
+  </wpt>`;
+    })
+    .join("\n");
+
   const trkpts = coords
     .map(
       (c) =>
-        `      <trkpt lat="${c[0].toFixed(6)}" lon="${c[1].toFixed(6)}"></trkpt>`
+        `      <trkpt lat="${c[0].toFixed(6)}" lon="${c[1].toFixed(6)}"></trkpt>`,
     )
     .join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Rute til GPX" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>${escape(name)}</name>
+    <name>${escapeXml(name)}</name>
     <time>${time}</time>
-  </metadata>
+  </metadata>${wpts ? "\n" + wpts : ""}
   <trk>
-    <name>${escape(name)}</name>
+    <name>${escapeXml(name)}</name>
     <trkseg>
 ${trkpts}
     </trkseg>
