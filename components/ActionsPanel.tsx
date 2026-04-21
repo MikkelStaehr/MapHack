@@ -1,8 +1,10 @@
 "use client";
 
 import { useRef } from "react";
+import type { Phase } from "@/lib/types";
 
 type Props = {
+  phase: Phase;
   useRouting: boolean;
   onRoutingToggle: () => void;
   routeName: string;
@@ -17,6 +19,7 @@ type Props = {
 };
 
 export default function ActionsPanel({
+  phase,
   useRouting,
   onRoutingToggle,
   routeName,
@@ -51,27 +54,29 @@ export default function ActionsPanel({
       className="flex flex-col gap-2.5 border-t border-[var(--color-line)] bg-[var(--color-panel)] px-4 pt-3.5"
       style={{ paddingBottom: "calc(0.875rem + env(safe-area-inset-bottom))" }}
     >
-      {/* Routing toggle */}
-      <div className="flex items-center gap-2 px-1 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-wider text-[var(--color-ink-dim)]">
-        <button
-          onClick={onRoutingToggle}
-          className={`relative h-5 w-9 rounded-full border transition-colors cursor-pointer ${
-            useRouting
-              ? "border-[var(--color-accent)] bg-[var(--color-accent)]"
-              : "border-[var(--color-line)] bg-[var(--color-panel-2)]"
-          }`}
-          aria-label="Toggle routing"
-        >
-          <span
-            className={`absolute top-px h-4 w-4 rounded-full transition-transform ${
+      {/* Routing toggle — only relevant in the route-building phase */}
+      {phase === "route" && (
+        <div className="flex items-center gap-2 px-1 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-wider text-[var(--color-ink-dim)]">
+          <button
+            onClick={onRoutingToggle}
+            className={`relative h-5 w-9 rounded-full border transition-colors cursor-pointer ${
               useRouting
-                ? "translate-x-[17px] bg-[var(--color-accent-ink)]"
-                : "translate-x-px bg-[var(--color-ink)]"
+                ? "border-[var(--color-accent)] bg-[var(--color-accent)]"
+                : "border-[var(--color-line)] bg-[var(--color-panel-2)]"
             }`}
-          />
-        </button>
-        <span>Følg veje (cykel)</span>
-      </div>
+            aria-label="Toggle routing"
+          >
+            <span
+              className={`absolute top-px h-4 w-4 rounded-full transition-transform ${
+                useRouting
+                  ? "translate-x-[17px] bg-[var(--color-accent-ink)]"
+                  : "translate-x-px bg-[var(--color-ink)]"
+              }`}
+            />
+          </button>
+          <span>Følg veje (cykel)</span>
+        </div>
+      )}
 
       <input
         type="text"
@@ -82,9 +87,11 @@ export default function ActionsPanel({
       />
 
       <div className="flex gap-2">
-        <button onClick={onUndo} className={`flex-1 ${btnSecondary}`}>
-          Fortryd
-        </button>
+        {phase === "route" && (
+          <button onClick={onUndo} className={`flex-1 ${btnSecondary}`}>
+            Fortryd
+          </button>
+        )}
         <button
           onClick={onReverse}
           disabled={!canDownload}

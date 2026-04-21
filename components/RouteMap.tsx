@@ -8,6 +8,7 @@ import type {
   Coord,
   LatLng,
   Mode,
+  Phase,
   POI,
   PoiSnapRequest,
   PoiType,
@@ -49,6 +50,7 @@ export type RouteMapHandle = {
 
 type Props = {
   mode: Mode;
+  phase: Phase;
   useRouting: boolean;
   waypoints: LatLng[];
   routeCoords: Coord[];
@@ -64,6 +66,7 @@ type Props = {
 const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
   {
     mode,
+    phase,
     useRouting,
     waypoints,
     routeCoords,
@@ -91,6 +94,7 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
 
   // Keep refs to the latest props so Leaflet event handlers see current values
   const modeRef = useRef(mode);
+  const phaseRef = useRef(phase);
   const useRoutingRef = useRef(useRouting);
   const waypointsRef = useRef(waypoints);
   const routeCoordsRef = useRef(routeCoords);
@@ -106,6 +110,9 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
   useEffect(() => {
     useRoutingRef.current = useRouting;
   }, [useRouting]);
@@ -171,33 +178,36 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
         );
       }
 
-      // Map click handler. Priority: if the click is within the pixel
-      // threshold of an existing route, open the POI create sheet. Otherwise
-      // fall through to the click-mode behavior of appending a waypoint.
+      // Map click handler. Phase dictates the action completely:
+      //   phase="poi":   snap + open POI create sheet if within threshold
+      //   phase="route": append waypoint in click mode
+      // No cross-phase leaking — the two-step wizard keeps the interactions
+      // from fighting over the same tap.
       map.on("click", (e) => {
-        const route = routeCoordsRef.current;
-        if (route.length >= 2) {
+        if (phaseRef.current === "poi") {
+          const route = routeCoordsRef.current;
+          if (route.length < 2) return;
           const snap = snapToRoute(
             { lat: e.latlng.lat, lng: e.latlng.lng },
             route,
           );
-          if (snap) {
-            const clickPx = map.latLngToContainerPoint(e.latlng);
-            const snapPx = map.latLngToContainerPoint(snap.coord);
-            const distPx = Math.hypot(
-              clickPx.x - snapPx.x,
-              clickPx.y - snapPx.y,
-            );
-            if (distPx <= POI_SNAP_THRESHOLD_PX) {
-              callbacksRef.current.onPoiRequest({
-                coord: snap.coord,
-                routeIndex: snap.segmentIndex,
-                distanceFromStartM: snap.distanceFromStartM,
-              });
-              return;
-            }
+          if (!snap) return;
+          const clickPx = map.latLngToContainerPoint(e.latlng);
+          const snapPx = map.latLngToContainerPoint(snap.coord);
+          const distPx = Math.hypot(
+            clickPx.x - snapPx.x,
+            clickPx.y - snapPx.y,
+          );
+          if (distPx <= POI_SNAP_THRESHOLD_PX) {
+            callbacksRef.current.onPoiRequest({
+              coord: snap.coord,
+              routeIndex: snap.segmentIndex,
+              distanceFromStartM: snap.distanceFromStartM,
+            });
           }
+          return;
         }
+        // phase === "route"
         if (modeRef.current !== "click") return;
         const next = [
           ...waypointsRef.current,
@@ -229,7 +239,9 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
     }
   }, [mode]);
 
-  // Render markers from waypoints
+  // Render markers from waypoints. Hidden in POI phase to reduce visual
+  // clutter — the route is locked at that point so draggable handles
+  // would be misleading anyway.
   useEffect(() => {
     const map = mapRef.current;
     const L = LRef.current;
@@ -237,6 +249,8 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
 
     markersRef.current.forEach((m) => map.removeLayer(m));
     markersRef.current = [];
+
+    if (phase === "poi") return;
 
     waypoints.forEach((wp, i) => {
       const isStart = i === 0;
@@ -259,10 +273,11 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       });
       markersRef.current.push(m);
     });
-  }, [waypoints]);
+  }, [waypoints, phase]);
 
   // Render POI markers. Each marker is a colored circle with a Lucide icon
-  // rendered to SVG once per type at module load.
+  // rendered to SVG once per type at module load. Hidden in route phase so
+  // previously-placed checkpoints don't confuse route editing.
   useEffect(() => {
     const map = mapRef.current;
     const L = LRef.current;
@@ -272,6 +287,8 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
 
     poiMarkersRef.current.forEach((m) => map.removeLayer(m));
     poiMarkersRef.current = [];
+
+    if (phase === "route") return;
 
     pois.forEach((poi) => {
       const cfg = POI_CONFIG[poi.type];
@@ -290,7 +307,7 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       });
       poiMarkersRef.current.push(m);
     });
-  }, [pois]);
+  }, [pois, phase]);
 
   // Rebuild route when waypoints or routing toggle change (click mode only)
   useEffect(() => {
@@ -392,6 +409,7 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
     };
 
     const onStart = (e: MouseEvent | TouchEvent) => {
+      if (phaseRef.current !== "route") return;
       if (modeRef.current !== "draw") return;
       e.preventDefault();
       const ll = getLatLng(e);

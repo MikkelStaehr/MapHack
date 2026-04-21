@@ -9,6 +9,7 @@ import { Toast, Hint, LoadingOverlay } from "@/components/Toast";
 import SearchBar from "@/components/SearchBar";
 import PoiCreateSheet from "@/components/PoiCreateSheet";
 import PoiInfoSheet from "@/components/PoiInfoSheet";
+import PhaseBar from "@/components/PhaseBar";
 
 // qrcode + modal UI is only needed when the user actually shares — keep
 // it out of the main bundle and pull it in on first open.
@@ -24,6 +25,7 @@ import type {
   Coord,
   LatLng,
   Mode,
+  Phase,
   POI,
   PoiSnapRequest,
   PoiType,
@@ -53,6 +55,7 @@ export default function Home() {
   const [pois, setPois] = useState<POI[]>([]);
   const [pendingPoi, setPendingPoi] = useState<PoiSnapRequest | null>(null);
   const [selectedPoiId, setSelectedPoiId] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>("route");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [toastKey, setToastKey] = useState(0);
@@ -68,9 +71,11 @@ export default function Home() {
     setToastKey((k) => k + 1);
   };
 
-  // Update hint when mode changes, auto-hide after 3s
+  // Update hint when phase or mode changes, auto-hide after 3s
   useEffect(() => {
-    if (mode === "draw") {
+    if (phase === "poi") {
+      setHint("Tap på ruten for at markere checkpoints");
+    } else if (mode === "draw") {
       setHint("Tegn ruten med fingeren - slip for at afslutte");
     } else {
       setHint("Tap på kortet for at sætte punkter");
@@ -78,7 +83,7 @@ export default function Home() {
     setHintVisible(true);
     const t = setTimeout(() => setHintVisible(false), 3000);
     return () => clearTimeout(t);
-  }, [mode]);
+  }, [mode, phase]);
 
   // Mirror route into a module-level snapshot so the ErrorBoundary can
   // rescue it if React crashes and page state becomes inaccessible.
@@ -107,11 +112,18 @@ export default function Home() {
   const clearAll = () => {
     setWaypoints([]);
     setRouteCoords([]);
+    setPois([]);
+    setPhase("route");
   };
 
   const handleClear = () => {
-    if (waypoints.length === 0 && routeCoords.length === 0) return;
-    if (confirm("Ryd hele ruten?")) clearAll();
+    if (
+      waypoints.length === 0 &&
+      routeCoords.length === 0 &&
+      pois.length === 0
+    )
+      return;
+    if (confirm("Ryd hele ruten og alle checkpoints?")) clearAll();
   };
 
   const handleDownload = () => {
@@ -160,6 +172,10 @@ export default function Home() {
         },
       ]);
       if (parsed.name) setRouteName(parsed.name);
+      // New route → wipe any existing POIs and bring user back to route
+      // phase. POI-through-share comes later in step 8.
+      setPois([]);
+      setPhase("route");
       setTimeout(() => mapRef.current?.fitToRoute(), 60);
       showToast("Rute indlæst fra link ✓");
     };
@@ -250,6 +266,10 @@ export default function Home() {
       ]);
       const cleanName = name || file.name.replace(/\.gpx$/i, "");
       setRouteName(cleanName);
+      // New file → fresh POI slate, back in route phase. POI parsing from
+      // the file comes in step 7.
+      setPois([]);
+      setPhase("route");
       // Fit map to the new route after state settles
       setTimeout(() => mapRef.current?.fitToRoute(), 50);
       showToast("Rute indlæst ✓");
@@ -264,7 +284,12 @@ export default function Home() {
       <Header pointCount={pointCount} distanceKm={distanceKm} />
 
       <div className="relative flex-1">
-        <ModeToggle mode={mode} onChange={setMode} />
+        <PhaseBar
+          phase={phase}
+          onChange={setPhase}
+          canGoToPoi={routeCoords.length >= 2}
+        />
+        {phase === "route" && <ModeToggle mode={mode} onChange={setMode} />}
         <SearchBar
           onPick={(lat, lng) => mapRef.current?.panTo(lat, lng)}
         />
@@ -272,6 +297,7 @@ export default function Home() {
         <RouteMap
           ref={mapRef}
           mode={mode}
+          phase={phase}
           useRouting={useRouting}
           waypoints={waypoints}
           routeCoords={routeCoords}
@@ -287,6 +313,7 @@ export default function Home() {
       </div>
 
       <ActionsPanel
+        phase={phase}
         useRouting={useRouting}
         onRoutingToggle={() => setUseRouting((v) => !v)}
         routeName={routeName}

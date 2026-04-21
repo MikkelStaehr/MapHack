@@ -12,7 +12,7 @@ export default function ModeToggle({ mode, onChange }: Props) {
   const inactive = "bg-transparent text-[var(--color-ink-dim)]";
 
   return (
-    <div className="absolute left-1/2 top-3 z-[500] flex -translate-x-1/2 gap-0.5 rounded-full border border-[var(--color-line)] bg-[var(--color-panel)] p-1 shadow-lg shadow-black/40">
+    <div className="absolute left-1/2 top-16 z-[500] flex -translate-x-1/2 gap-0.5 rounded-full border border-[var(--color-line)] bg-[var(--color-panel)] p-1 shadow-lg shadow-black/40">
       <button
         onClick={() => onChange("click")}
         className={`${btnBase} ${mode === "click" ? active : inactive}`}
