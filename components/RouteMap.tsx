@@ -7,7 +7,6 @@ import { createElement } from "react";
 import type {
   Coord,
   LatLng,
-  Mode,
   Phase,
   POI,
   PoiSnapRequest,
@@ -49,7 +48,6 @@ export type RouteMapHandle = {
 };
 
 type Props = {
-  mode: Mode;
   phase: Phase;
   useRouting: boolean;
   waypoints: LatLng[];
@@ -65,7 +63,6 @@ type Props = {
 
 const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
   {
-    mode,
     phase,
     useRouting,
     waypoints,
@@ -85,15 +82,12 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
   const markersRef = useRef<Marker[]>([]);
   const poiMarkersRef = useRef<Marker[]>([]);
   const lineRef = useRef<Polyline | null>(null);
-  const isDrawingRef = useRef(false);
-  const drawCoordsRef = useRef<Coord[]>([]);
   const LRef = useRef<typeof import("leaflet") | null>(null);
   // Set by parent before a waypoint change that should NOT trigger re-routing
   // (e.g. when loading an uploaded GPX where routeCoords is the source of truth)
   const skipNextRoutingRef = useRef(false);
 
   // Keep refs to the latest props so Leaflet event handlers see current values
-  const modeRef = useRef(mode);
   const phaseRef = useRef(phase);
   const useRoutingRef = useRef(useRouting);
   const waypointsRef = useRef(waypoints);
@@ -107,9 +101,6 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
     onPoiSelect,
   });
 
-  useEffect(() => {
-    modeRef.current = mode;
-  }, [mode]);
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
@@ -207,8 +198,7 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
           }
           return;
         }
-        // phase === "route"
-        if (modeRef.current !== "click") return;
+        // phase === "route": append a waypoint at the click location
         const next = [
           ...waypointsRef.current,
           { lat: e.latlng.lat, lng: e.latlng.lng },
@@ -225,19 +215,6 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       mapRef.current = null;
     };
   }, []);
-
-  // Toggle dragging when mode changes
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    if (mode === "draw") {
-      map.dragging.disable();
-      map.doubleClickZoom.disable();
-    } else {
-      map.dragging.enable();
-      map.doubleClickZoom.enable();
-    }
-  }, [mode]);
 
   // Render markers from waypoints. Only in route phase — in poi/generate
   // phases the route is locked and draggable handles would be misleading.
@@ -311,10 +288,8 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
     });
   }, [pois, phase]);
 
-  // Rebuild route when waypoints or routing toggle change (click mode only)
+  // Rebuild route when waypoints or routing toggle change
   useEffect(() => {
-    if (mode !== "click") return;
-
     if (skipNextRoutingRef.current) {
       skipNextRoutingRef.current = false;
       return;
@@ -357,7 +332,7 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
     return () => {
       cancelled = true;
     };
-  }, [waypoints, useRouting, mode]);
+  }, [waypoints, useRouting]);
 
   // Draw polyline from routeCoords
   useEffect(() => {
@@ -382,89 +357,6 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
     // which is what we want — the map click handler does snap + POI dispatch
     // uniformly for both on-the-line and near-the-line clicks.
   }, [routeCoords]);
-
-  // Freehand draw handlers
-  useEffect(() => {
-    const container = containerRef.current;
-    const map = mapRef.current;
-    if (!container || !map) return;
-
-    const getLatLng = (e: MouseEvent | TouchEvent): Coord | null => {
-      const point =
-        "touches" in e && e.touches.length > 0 ? e.touches[0] : (e as MouseEvent);
-      const rect = container.getBoundingClientRect();
-      const x = point.clientX - rect.left;
-      const y = point.clientY - rect.top;
-      const ll = map.containerPointToLatLng([x, y]);
-      return [ll.lat, ll.lng];
-    };
-
-    // Throttle the React state push to ~10Hz. Every touchmove still appends
-    // to drawCoordsRef (no data loss), but we only broadcast to the parent
-    // at most every 100ms — enough for the header distance readout to feel
-    // live without piling up N renders per second on long strokes.
-    let lastFlush = 0;
-    const FLUSH_MS = 100;
-    const flush = () => {
-      lastFlush = performance.now();
-      callbacksRef.current.onRouteChange([...drawCoordsRef.current]);
-    };
-
-    const onStart = (e: MouseEvent | TouchEvent) => {
-      if (phaseRef.current !== "route") return;
-      if (modeRef.current !== "draw") return;
-      e.preventDefault();
-      const ll = getLatLng(e);
-      if (!ll) return;
-      isDrawingRef.current = true;
-      drawCoordsRef.current = [ll];
-      callbacksRef.current.onWaypointsChange([]);
-      flush();
-    };
-
-    const onMove = (e: MouseEvent | TouchEvent) => {
-      if (!isDrawingRef.current || modeRef.current !== "draw") return;
-      e.preventDefault();
-      const ll = getLatLng(e);
-      if (!ll) return;
-      drawCoordsRef.current.push(ll);
-      if (performance.now() - lastFlush >= FLUSH_MS) flush();
-    };
-
-    const onEnd = () => {
-      if (!isDrawingRef.current) return;
-      isDrawingRef.current = false;
-      if (modeRef.current !== "draw") return;
-      const coords = drawCoordsRef.current;
-      if (coords.length < 2) return;
-      // Final flush catches whatever accumulated since the last throttle
-      // tick so the route and distance always end on exact data.
-      flush();
-      callbacksRef.current.onWaypointsChange([
-        { lat: coords[0][0], lng: coords[0][1] },
-        {
-          lat: coords[coords.length - 1][0],
-          lng: coords[coords.length - 1][1],
-        },
-      ]);
-    };
-
-    container.addEventListener("mousedown", onStart);
-    container.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onEnd);
-    container.addEventListener("touchstart", onStart, { passive: false });
-    container.addEventListener("touchmove", onMove, { passive: false });
-    container.addEventListener("touchend", onEnd);
-
-    return () => {
-      container.removeEventListener("mousedown", onStart);
-      container.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onEnd);
-      container.removeEventListener("touchstart", onStart);
-      container.removeEventListener("touchmove", onMove);
-      container.removeEventListener("touchend", onEnd);
-    };
-  }, []);
 
   // Imperative API for parent to fit the map to the current route
   useImperativeHandle(ref, () => ({

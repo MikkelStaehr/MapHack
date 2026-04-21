@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Header from "@/components/Header";
-import ModeToggle from "@/components/ModeToggle";
 import ActionsPanel from "@/components/ActionsPanel";
 import { Toast, Hint, LoadingOverlay } from "@/components/Toast";
 import SearchBar from "@/components/SearchBar";
@@ -28,7 +27,6 @@ const ShareModal = dynamic(() => import("@/components/ShareModal"), {
 import type {
   Coord,
   LatLng,
-  Mode,
   Phase,
   POI,
   PoiSnapRequest,
@@ -53,7 +51,6 @@ const RouteMap = dynamic(() => import("@/components/RouteMap"), {
 });
 
 export default function Home() {
-  const [mode, setMode] = useState<Mode>("click");
   const [useRouting, setUseRouting] = useState(true);
   const [waypoints, setWaypoints] = useState<LatLng[]>([]);
   const [routeCoords, setRouteCoords] = useState<Coord[]>([]);
@@ -78,19 +75,17 @@ export default function Home() {
     setToastKey((k) => k + 1);
   };
 
-  // Update hint when phase or mode changes, auto-hide after 3s
+  // Update hint when phase changes, auto-hide after 3s
   useEffect(() => {
-    if (phase === "poi") {
-      setHint("Tap på ruten for at markere checkpoints");
-    } else if (mode === "draw") {
-      setHint("Tegn ruten med fingeren - slip for at afslutte");
-    } else {
-      setHint("Tap på kortet for at sætte punkter");
-    }
+    setHint(
+      phase === "poi"
+        ? "Tap på ruten for at markere checkpoints"
+        : "Tap på kortet for at sætte punkter",
+    );
     setHintVisible(true);
     const t = setTimeout(() => setHintVisible(false), 3000);
     return () => clearTimeout(t);
-  }, [mode, phase]);
+  }, [phase]);
 
   // Mirror route into a module-level snapshot so the ErrorBoundary can
   // rescue it if React crashes and page state becomes inaccessible.
@@ -116,11 +111,6 @@ export default function Home() {
   const canDownload = routeCoords.length >= 2;
 
   const handleUndo = () => {
-    if (mode === "draw") {
-      // In draw mode undo = clear (one continuous stroke)
-      clearAll();
-      return;
-    }
     if (waypoints.length === 0) return;
     setWaypoints(waypoints.slice(0, -1));
   };
@@ -335,14 +325,12 @@ export default function Home() {
           onChange={setPhase}
           canAdvance={routeCoords.length >= 2}
         />
-        {phase === "route" && <ModeToggle mode={mode} onChange={setMode} />}
         <SearchBar
           onPick={(lat, lng) => mapRef.current?.panTo(lat, lng)}
         />
         <Hint text={hint} visible={hintVisible} />
         <RouteMap
           ref={mapRef}
-          mode={mode}
           phase={phase}
           useRouting={useRouting}
           waypoints={waypoints}
