@@ -205,12 +205,17 @@ export default function Home() {
         },
       ]);
       if (parsed.name) setRouteName(parsed.name);
-      // New route → wipe any existing POIs and bring user back to route
-      // phase. POI-through-share comes later in step 8.
-      setPois([]);
+      // Apply POIs that came through the link (if any). Each is already
+      // anchored to the route by the parser.
+      setPois(parsed.pois);
       setPhase("route");
       setTimeout(() => mapRef.current?.fitToRoute(), 60);
-      showToast("Rute indlæst fra link ✓");
+      const n = parsed.pois.length;
+      showToast(
+        n > 0
+          ? `Rute + ${n} checkpoint${n === 1 ? "" : "s"} indlæst fra link ✓`
+          : "Rute indlæst fra link ✓",
+      );
     };
     apply();
   }, []);
@@ -262,7 +267,7 @@ export default function Home() {
   const handleShare = async () => {
     if (routeCoords.length < 2) return;
     const name = (routeName || "Cykelrute").trim();
-    const url = buildShareUrl(name, routeCoords);
+    const url = buildShareUrl(name, routeCoords, pois);
 
     // Reflect in address bar so refresh keeps the route.
     window.history.replaceState(null, "", url);
