@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { Bike } from "lucide-react";
 import type { Phase } from "@/lib/types";
 
 type Props = {
@@ -41,7 +42,7 @@ export default function ActionsPanel({
   };
 
   const btnBase =
-    "rounded-lg border px-3.5 py-3 font-medium text-sm transition-transform active:scale-[0.97] cursor-pointer";
+    "rounded-lg border px-3 py-2.5 font-medium text-sm transition-transform active:scale-[0.97] cursor-pointer";
   const btnSecondary = `${btnBase} border-[var(--color-line)] bg-transparent text-[var(--color-ink)]`;
   const btnNeutral = `${btnBase} border-[var(--color-line)] bg-[var(--color-panel-2)] text-[var(--color-ink)]`;
   const btnDanger = `${btnBase} border-[var(--color-line)] bg-transparent text-[var(--color-danger)]`;
@@ -51,40 +52,35 @@ export default function ActionsPanel({
 
   return (
     <div
-      className="flex flex-col gap-2.5 border-t border-[var(--color-line)] bg-[var(--color-panel)] px-4 pt-3.5"
-      style={{ paddingBottom: "calc(0.875rem + env(safe-area-inset-bottom))" }}
+      className="flex flex-col gap-2 border-t border-[var(--color-line)] bg-[var(--color-panel)] px-4 pt-2.5"
+      style={{ paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom))" }}
     >
-      {/* Routing toggle — only relevant in the route-building phase */}
-      {phase === "route" && (
-        <div className="flex items-center gap-2 px-1 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-wider text-[var(--color-ink-dim)]">
+      {/* Name input with inline routing toggle (route phase only). The toggle
+          lives here instead of its own row so route planning doesn't burn
+          vertical space on a one-shot setting. */}
+      <div className="flex items-center gap-2">
+        {phase === "route" && (
           <button
             onClick={onRoutingToggle}
-            className={`relative h-5 w-9 rounded-full border transition-colors cursor-pointer ${
+            aria-label={useRouting ? "Følg veje (slået til)" : "Lige linjer"}
+            title="Følg veje (cykel)"
+            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border transition-colors cursor-pointer ${
               useRouting
-                ? "border-[var(--color-accent)] bg-[var(--color-accent)]"
-                : "border-[var(--color-line)] bg-[var(--color-panel-2)]"
+                ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-ink)]"
+                : "border-[var(--color-line)] bg-[var(--color-panel-2)] text-[var(--color-ink-dim)]"
             }`}
-            aria-label="Toggle routing"
           >
-            <span
-              className={`absolute top-px h-4 w-4 rounded-full transition-transform ${
-                useRouting
-                  ? "translate-x-[17px] bg-[var(--color-accent-ink)]"
-                  : "translate-x-px bg-[var(--color-ink)]"
-              }`}
-            />
+            <Bike size={18} strokeWidth={2.5} />
           </button>
-          <span>Følg veje (cykel)</span>
-        </div>
-      )}
-
-      <input
-        type="text"
-        value={routeName}
-        onChange={(e) => onRouteNameChange(e.target.value)}
-        placeholder="Rutens navn (fx Onsdag solo)"
-        className="rounded-lg border border-[var(--color-line)] bg-[var(--color-panel-2)] px-3.5 py-3 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-ink-dim)] focus:border-[var(--color-accent)] focus:outline-none"
-      />
+        )}
+        <input
+          type="text"
+          value={routeName}
+          onChange={(e) => onRouteNameChange(e.target.value)}
+          placeholder="Rutens navn (fx Onsdag solo)"
+          className="flex-1 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel-2)] px-3 py-2.5 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-ink-dim)] focus:border-[var(--color-accent)] focus:outline-none"
+        />
+      </div>
 
       <div className="flex gap-2">
         {phase === "route" && (
@@ -109,7 +105,7 @@ export default function ActionsPanel({
           onClick={() => fileInputRef.current?.click()}
           className={`flex-1 ${btnNeutral}`}
         >
-          Upload GPX
+          Upload
         </button>
         <button
           onClick={onDownload}
@@ -118,15 +114,14 @@ export default function ActionsPanel({
         >
           Download GPX
         </button>
+        <button
+          onClick={onShare}
+          disabled={!canDownload}
+          className={`flex-1 ${btnNeutral} disabled:text-[var(--color-ink-dim)]`}
+        >
+          Del link
+        </button>
       </div>
-
-      <button
-        onClick={onShare}
-        disabled={!canDownload}
-        className={`w-full ${btnNeutral} disabled:text-[var(--color-ink-dim)]`}
-      >
-        Del som link
-      </button>
 
       <input
         ref={fileInputRef}
