@@ -100,7 +100,7 @@ export default function GeneratePanel({
           }`}
         >
           <Download size={16} strokeWidth={2.5} />
-          Download GPX
+          Download
         </button>
         <button
           onClick={onShare}

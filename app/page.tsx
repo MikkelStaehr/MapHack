@@ -11,6 +11,9 @@ import PoiCreateSheet from "@/components/PoiCreateSheet";
 import PoiInfoSheet from "@/components/PoiInfoSheet";
 import PhaseBar from "@/components/PhaseBar";
 import GeneratePanel from "@/components/GeneratePanel";
+import DownloadFormatSheet, {
+  type DownloadFormat,
+} from "@/components/DownloadFormatSheet";
 
 // qrcode + modal UI is only needed when the user actually shares — keep
 // it out of the main bundle and pull it in on first open.
@@ -33,6 +36,7 @@ import type {
 } from "@/lib/types";
 import { totalDistanceKm } from "@/lib/geo";
 import { buildGpx, parseGpx, sanitizeFilename } from "@/lib/gpx";
+import { buildTcx } from "@/lib/tcx";
 import { buildShareUrl, parseShareHash } from "@/lib/share";
 import { setRouteSnapshot } from "@/lib/routeMirror";
 import type { RouteMapHandle } from "@/components/RouteMap";
@@ -57,6 +61,7 @@ export default function Home() {
   const [pendingPoi, setPendingPoi] = useState<PoiSnapRequest | null>(null);
   const [selectedPoiId, setSelectedPoiId] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("route");
+  const [downloadOpen, setDownloadOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [toastKey, setToastKey] = useState(0);
@@ -138,18 +143,35 @@ export default function Home() {
 
   const handleDownload = () => {
     if (routeCoords.length < 2) return;
+    setDownloadOpen(true);
+  };
+
+  const handleDownloadFormat = (format: DownloadFormat) => {
+    if (routeCoords.length < 2) return;
     const name = (routeName || "Cykelrute").trim();
-    const gpx = buildGpx(name, routeCoords, pois);
-    const blob = new Blob([gpx], { type: "application/gpx+xml" });
+    let body: string;
+    let mime: string;
+    let ext: string;
+    if (format === "tcx") {
+      body = buildTcx(name, routeCoords, pois);
+      mime = "application/vnd.garmin.tcx+xml";
+      ext = ".tcx";
+    } else {
+      body = buildGpx(name, routeCoords, pois);
+      mime = "application/gpx+xml";
+      ext = ".gpx";
+    }
+    const blob = new Blob([body], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = sanitizeFilename(name) + ".gpx";
+    a.download = sanitizeFilename(name) + ext;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    showToast("GPX downloadet ✓");
+    setDownloadOpen(false);
+    showToast(`${format.toUpperCase()} downloadet ✓`);
   };
 
   // Load a shared route from the URL hash on mount. Retries until RouteMap
@@ -366,6 +388,12 @@ export default function Home() {
         poi={selectedPoi}
         onDelete={handleDeletePoi}
         onClose={() => setSelectedPoiId(null)}
+      />
+      <DownloadFormatSheet
+        open={downloadOpen}
+        hasCheckpoints={pois.length > 0}
+        onSelect={handleDownloadFormat}
+        onCancel={() => setDownloadOpen(false)}
       />
     </div>
   );
