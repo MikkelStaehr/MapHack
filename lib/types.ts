@@ -2,10 +2,13 @@ export type LatLng = { lat: number; lng: number };
 export type Coord = [number, number]; // [lat, lng]
 export type Mode = "click" | "draw";
 
-// Two-step wizard: build route first, then mark POIs on it. Splits UI so
-// waypoint markers and POI markers never compete for the same click on the
-// same screen.
-export type Phase = "route" | "poi";
+// Three-step wizard:
+//   1. route    - build or upload the route
+//   2. poi      - mark checkpoints on the finished route
+//   3. generate - name the route, review stats, export
+// Splits UI so waypoint markers, POI markers and review affordances never
+// compete on the same screen.
+export type Phase = "route" | "poi" | "generate";
 
 // POI / checkpoint types. Maps to Garmin TCX CoursePoint PointType at export
 // (sprint → Sprint, kom → Summit, water → Water, coffee → Food, info → Generic).

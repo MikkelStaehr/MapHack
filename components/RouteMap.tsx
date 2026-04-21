@@ -239,9 +239,8 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
     }
   }, [mode]);
 
-  // Render markers from waypoints. Hidden in POI phase to reduce visual
-  // clutter — the route is locked at that point so draggable handles
-  // would be misleading anyway.
+  // Render markers from waypoints. Only in route phase — in poi/generate
+  // phases the route is locked and draggable handles would be misleading.
   useEffect(() => {
     const map = mapRef.current;
     const L = LRef.current;
@@ -250,7 +249,7 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
     markersRef.current.forEach((m) => map.removeLayer(m));
     markersRef.current = [];
 
-    if (phase === "poi") return;
+    if (phase !== "route") return;
 
     waypoints.forEach((wp, i) => {
       const isStart = i === 0;
@@ -300,6 +299,9 @@ const RouteMap = forwardRef<RouteMapHandle, Props>(function RouteMap(
       });
       const m = L.marker(poi.coord, { icon }).addTo(map);
       m.on("click", (ev) => {
+        // Tap-to-edit only in the poi phase; in generate phase it's a
+        // review-only view so taps should be no-ops.
+        if (phaseRef.current !== "poi") return;
         // Stop propagation so the map click handler (which opens POI-create)
         // doesn't also fire when the user actually wanted to inspect this POI.
         L.DomEvent.stopPropagation(ev);

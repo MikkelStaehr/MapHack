@@ -10,6 +10,7 @@ import SearchBar from "@/components/SearchBar";
 import PoiCreateSheet from "@/components/PoiCreateSheet";
 import PoiInfoSheet from "@/components/PoiInfoSheet";
 import PhaseBar from "@/components/PhaseBar";
+import GeneratePanel from "@/components/GeneratePanel";
 
 // qrcode + modal UI is only needed when the user actually shares — keep
 // it out of the main bundle and pull it in on first open.
@@ -90,6 +91,15 @@ export default function Home() {
   useEffect(() => {
     setRouteSnapshot(routeCoords, routeName);
   }, [routeCoords, routeName]);
+
+  // When entering the generate phase, fit the map to the route so the user
+  // sees the whole thing at once for review. Small delay for layout.
+  useEffect(() => {
+    if (phase === "generate") {
+      const t = setTimeout(() => mapRef.current?.fitToRoute(), 80);
+      return () => clearTimeout(t);
+    }
+  }, [phase]);
 
   const distanceKm = useMemo(() => totalDistanceKm(routeCoords), [routeCoords]);
   const selectedPoi = useMemo(
@@ -287,7 +297,7 @@ export default function Home() {
         <PhaseBar
           phase={phase}
           onChange={setPhase}
-          canGoToPoi={routeCoords.length >= 2}
+          canAdvance={routeCoords.length >= 2}
         />
         {phase === "route" && <ModeToggle mode={mode} onChange={setMode} />}
         <SearchBar
@@ -312,20 +322,28 @@ export default function Home() {
         <LoadingOverlay show={loading} />
       </div>
 
-      <ActionsPanel
-        phase={phase}
-        useRouting={useRouting}
-        onRoutingToggle={() => setUseRouting((v) => !v)}
-        routeName={routeName}
-        onRouteNameChange={setRouteName}
-        canDownload={canDownload}
-        onUndo={handleUndo}
-        onClear={handleClear}
-        onDownload={handleDownload}
-        onUploadFile={handleUploadFile}
-        onShare={handleShare}
-        onReverse={handleReverse}
-      />
+      {phase === "generate" ? (
+        <GeneratePanel
+          routeCoords={routeCoords}
+          pois={pois}
+          routeName={routeName}
+          onRouteNameChange={setRouteName}
+          canExport={canDownload}
+          onDownload={handleDownload}
+          onShare={handleShare}
+        />
+      ) : (
+        <ActionsPanel
+          phase={phase}
+          useRouting={useRouting}
+          onRoutingToggle={() => setUseRouting((v) => !v)}
+          canDownload={canDownload}
+          onUndo={handleUndo}
+          onClear={handleClear}
+          onUploadFile={handleUploadFile}
+          onReverse={handleReverse}
+        />
+      )}
 
       <Toast key={toastKey} message={toast} />
       {shareUrl && (
