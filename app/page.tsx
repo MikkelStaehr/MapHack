@@ -36,6 +36,7 @@ import { totalDistanceKm } from "@/lib/geo";
 import { buildGpx, sanitizeFilename } from "@/lib/gpx";
 import { buildTcx } from "@/lib/tcx";
 import { parseRouteFile } from "@/lib/import";
+import { saveOrShareFile } from "@/lib/saveFile";
 import { buildShareUrl, parseShareHash } from "@/lib/share";
 import { setRouteSnapshot } from "@/lib/routeMirror";
 import type { RouteMapHandle } from "@/components/RouteMap";
@@ -142,7 +143,7 @@ export default function Home() {
     setDownloadOpen(true);
   };
 
-  const handleDownloadFormat = (format: DownloadFormat) => {
+  const handleDownloadFormat = async (format: DownloadFormat) => {
     if (routeCoords.length < 2) return;
     const name = (routeName || "Cykelrute").trim();
     let body: string;
@@ -157,17 +158,17 @@ export default function Home() {
       mime = "application/gpx+xml";
       ext = ".gpx";
     }
-    const blob = new Blob([body], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = sanitizeFilename(name) + ext;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const filename = sanitizeFilename(name) + ext;
+    // Close the format sheet up-front so it doesn't sit behind the system
+    // share sheet on iOS while we await navigator.share.
     setDownloadOpen(false);
-    showToast(`${format.toUpperCase()} downloadet ✓`);
+    const result = await saveOrShareFile(body, filename, mime);
+    if (result === "shared") {
+      showToast(`${format.toUpperCase()} sendt ✓`);
+    } else if (result === "downloaded") {
+      showToast(`${format.toUpperCase()} downloadet ✓`);
+    }
+    // result === "cancelled": user dismissed the share sheet, no toast
   };
 
   // Load a shared route from the URL hash on mount. Retries until RouteMap
