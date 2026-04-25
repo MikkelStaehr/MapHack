@@ -59,6 +59,10 @@ export default function Home() {
   const [pendingPoi, setPendingPoi] = useState<PoiSnapRequest | null>(null);
   const [selectedPoiId, setSelectedPoiId] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("route");
+  // True when the route was loaded from a shared URL — recipient is locked
+  // to the review/generate phase and cannot edit. Reset to false whenever
+  // the route is wiped or replaced via upload.
+  const [viewOnly, setViewOnly] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -120,6 +124,7 @@ export default function Home() {
     setRouteCoords([]);
     setPois([]);
     setPhase("route");
+    setViewOnly(false);
   };
 
   const handleClear = () => {
@@ -208,13 +213,17 @@ export default function Home() {
       // Apply POIs that came through the link (if any). Each is already
       // anchored to the route by the parser.
       setPois(parsed.pois);
-      setPhase("route");
+      // Recipient lands directly on the review phase, locked there: shared
+      // routes are read-only by design — they shouldn't be modifiable by
+      // anyone but the original author.
+      setPhase("generate");
+      setViewOnly(true);
       setTimeout(() => mapRef.current?.fitToRoute(), 60);
       const n = parsed.pois.length;
       showToast(
         n > 0
-          ? `Rute + ${n} checkpoint${n === 1 ? "" : "s"} indlæst fra link ✓`
-          : "Rute indlæst fra link ✓",
+          ? `Rute + ${n} checkpoint${n === 1 ? "" : "s"} indlæst ✓`
+          : "Rute indlæst ✓",
       );
     };
     apply();
@@ -311,6 +320,7 @@ export default function Home() {
       // parser — apply them as-is. No dangling checkpoints from previous work.
       setPois(parsedPois);
       setPhase("route");
+      setViewOnly(false);
       // Fit map to the new route after state settles
       setTimeout(() => mapRef.current?.fitToRoute(), 50);
       const poiCount = parsedPois.length;
@@ -330,11 +340,13 @@ export default function Home() {
       <Header pointCount={pointCount} distanceKm={distanceKm} />
 
       <div className="relative flex-1">
-        <PhaseBar
-          phase={phase}
-          onChange={setPhase}
-          canAdvance={routeCoords.length >= 2}
-        />
+        {!viewOnly && (
+          <PhaseBar
+            phase={phase}
+            onChange={setPhase}
+            canAdvance={routeCoords.length >= 2}
+          />
+        )}
         <SearchBar
           onPick={(lat, lng) => mapRef.current?.panTo(lat, lng)}
         />
