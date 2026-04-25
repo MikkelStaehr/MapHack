@@ -169,8 +169,18 @@ export default function Home() {
   // has mounted so skipNextRouting() can take effect on the ref.
   useEffect(() => {
     const hash = window.location.hash;
+    // Distinguish "no hash present" (silent no-op) from "hash is there but
+    // parsing failed" (visible toast so the recipient knows something went
+    // wrong instead of silently seeing an empty map).
+    const looksLikeShareHash = hash.length > 1 && hash.includes("r=");
     const parsed = parseShareHash(hash);
-    if (!parsed) return;
+    if (!parsed) {
+      if (looksLikeShareHash) {
+        console.error("Could not parse share hash:", hash);
+        showToast("Linket kunne ikke læses");
+      }
+      return;
+    }
 
     if (parsed.expired) {
       showToast("Linket er udløbet (>24 timer)");

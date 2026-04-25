@@ -175,7 +175,16 @@ function decodePois(poiStr: string, route: Coord[]): POI[] {
     const idx = parseInt(parts[0], 10);
     const type = LETTER_TO_POI_TYPE[parts[1]];
     if (!type || !Number.isFinite(idx)) continue;
-    const name = parts[2] ? decodeURIComponent(parts[2]) : "";
+    let name = "";
+    if (parts[2]) {
+      try {
+        name = decodeURIComponent(parts[2]);
+      } catch {
+        // Malformed % escape — fall back to raw string rather than killing
+        // the whole parse and losing the route.
+        name = parts[2];
+      }
+    }
     const safeIdx = Math.max(0, Math.min(idx, route.length - 1));
     const coord = route[safeIdx];
     if (!coord) continue;
@@ -222,27 +231,35 @@ export function buildShareUrl(
  * look like a shared route. `expired` is true when older than SHARE_TTL_MS.
  */
 export function parseShareHash(hash: string): SharedRoute | null {
-  if (!hash || hash.length < 2) return null;
-  const trimmed = hash.startsWith("#") ? hash.slice(1) : hash;
-  const params = new URLSearchParams(trimmed);
-  const poly = params.get("r");
-  const ts = params.get("t");
-  if (!poly || !ts) return null;
-
-  let coords: Coord[];
   try {
-    coords = decodePolyline(poly);
-  } catch {
+    if (!hash || hash.length < 2) return null;
+    const trimmed = hash.startsWith("#") ? hash.slice(1) : hash;
+    const params = new URLSearchParams(trimmed);
+    const poly = params.get("r");
+    const ts = params.get("t");
+    if (!poly || !ts) return null;
+
+    let coords: Coord[];
+    try {
+      coords = decodePolyline(poly);
+    } catch {
+      return null;
+    }
+    if (coords.length < 2) return null;
+
+    const createdAt = Number(ts) * 1000;
+    if (!Number.isFinite(createdAt)) return null;
+
+    const expired = Date.now() - createdAt > SHARE_TTL_MS;
+    const name = params.get("n") ?? "";
+    const pois = decodePois(params.get("p") ?? "", coords);
+
+    return { name, coords, pois, createdAt, expired };
+  } catch (err) {
+    // Belt-and-suspenders: anything we didn't anticipate (malformed URL,
+    // weird browser quirk on the recipient side) bubbles to here instead
+    // of crashing the load effect silently.
+    console.error("parseShareHash failed:", err);
     return null;
   }
-  if (coords.length < 2) return null;
-
-  const createdAt = Number(ts) * 1000;
-  if (!Number.isFinite(createdAt)) return null;
-
-  const expired = Date.now() - createdAt > SHARE_TTL_MS;
-  const name = params.get("n") ?? "";
-  const pois = decodePois(params.get("p") ?? "", coords);
-
-  return { name, coords, pois, createdAt, expired };
 }
